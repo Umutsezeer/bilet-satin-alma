@@ -1,10 +1,7 @@
 # Resmi PHP Apache imajını temel alarak başlıyoruz.
 FROM php:8.2-apache
 
-# Gerekli sistem kütüphanelerini kuruyoruz ve PHP eklentilerini yüklüyoruz.
-# apt-get update: Paket listesini günceller.
-# apt-get install: Gerekli kütüphaneleri kurar (libsqlite3-dev ve gd için kütüphaneler).
-# docker-php-ext-install: PHP eklentilerini derleyip kurar.
+# Gerekli sistem kütüphanelerini ve PHP eklentilerini kuruyoruz.
 RUN apt-get update && apt-get install -y \
     libsqlite3-dev \
     libpng-dev \
@@ -18,6 +15,13 @@ WORKDIR /var/www/html
 
 # Projemizdeki tüm dosyaları Docker'ın içindeki bu çalışma klasörüne kopyalıyoruz.
 COPY . .
+
+# 1. Tüm proje dosyalarının sahibini Apache kullanıcısı yap.
+RUN chown -R www-data:www-data /var/www/html
+
+# 2. Veritabanının bulunduğu 'includes' klasörüne tam yazma izni (777) ver.
+# Bu, "readonly database" hatasını kesin olarak çözer.
+RUN chmod -R 777 /var/www/html/includes
 
 # Apache'nin mod_rewrite modülünü aktif hale getiriyoruz.
 RUN a2enmod rewrite

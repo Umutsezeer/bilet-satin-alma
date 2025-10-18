@@ -1,32 +1,62 @@
 <?php
 session_start();
 require '../includes/db.php';
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'company_admin' || !isset($_GET['id'])) { header("Location: /login.php"); exit; }
+
+// Güvenlik kontrolleri ve yönlendirmeler
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'company_admin') {
+    header("Location: /login.php");
+    exit;
+}
+if (!isset($_GET['id'])) {
+    header("Location: firm_trips.php");
+    exit;
+}
+
 $trip_id = $_GET['id'];
 $company_id = $_SESSION['firm_id'];
 $error_message = '';
+
+// --- GÜVENLİK KONTROLÜ VE VERİ ÇEKME ---
+// Seferi çekerken, aynı zamanda bu firmanın seferi mi diye de kontrol.
+$stmt = $pdo->prepare("SELECT * FROM Trips WHERE id = ? AND company_id = ?");
+$stmt->execute([$trip_id, $company_id]);
+$trip = $stmt->fetch();
+
+// Eğer sefer bulunamazsa, panele geri yönlendir.
+if (!$trip) {
+    header("Location: firm_trips.php");
+    exit;
+}
+
+// Form gönderildiğinde (güncelleme işlemi)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $departure_city = trim($_POST['departure_city']); $arrival_city = trim($_POST['destination_city']);
-    $departure_time = trim($_POST['departure_time']); $arrival_time = trim($_POST['arrival_time']);
-    $seat_count = trim($_POST['capacity']); $price = trim($_POST['price']);
-    if (empty($departure_city) || empty($arrival_city) || empty($departure_time) || empty($arrival_time) || empty($seat_count) || empty($price)) {
+    $departure_city = trim($_POST['departure_city']);
+    $destination_city = trim($_POST['destination_city']);
+    $departure_time = trim($_POST['departure_time']);
+    $arrival_time = trim($_POST['arrival_time']);
+    $capacity = trim($_POST['capacity']);
+    $price = trim($_POST['price']);
+
+    if (empty($departure_city) || empty($destination_city) || empty($departure_time) || empty($arrival_time) || empty($capacity) || empty($price)) {
         $error_message = "Lütfen tüm alanları doldurun.";
     } else {
         $sql = "UPDATE Trips SET departure_city = ?, destination_city = ?, departure_time = ?, arrival_time = ?, capacity = ?, price = ? WHERE id = ? AND company_id = ?";
         try {
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute([$departure_city, $arrival_city, $departure_time, $arrival_time, $seat_count, $price, $trip_id, $company_id]);
-            $_SESSION['flash_success'] = "Sefer (ID: $trip_id) başarıyla güncellendi!";
-            header("Location: firm_trips.php"); exit;
-        } catch (PDOException $e) { $error_message = "Güncelleme sırasında bir hata oluştu: " . $e->getMessage(); }
+            $stmt_update = $pdo->prepare($sql);
+            $stmt_update->execute([$departure_city, $destination_city, $departure_time, $arrival_time, $capacity, $price, $trip_id, $company_id]);
+            $_SESSION['flash_success'] = "Sefer başarıyla güncellendi!";
+            header("Location: firm_trips.php");
+            exit;
+        } catch (PDOException $e) {
+            $error_message = "Güncelleme sırasında bir hata oluştu: " . $e->getMessage();
+        }
     }
 }
+
+// HTML
 require '../layouts/header.php';
-$stmt = $pdo->prepare("SELECT * FROM Trips WHERE id = ? AND company_id = ?");
-$stmt->execute([$trip_id, $company_id]);
-$trip = $stmt->fetch();
-if (!$trip) { header("Location: firm_trips.php"); exit; }
 ?>
+
 <div class="row justify-content-center mt-5">
     <div class="col-md-8">
         <div class="card shadow-sm">
@@ -46,4 +76,5 @@ if (!$trip) { header("Location: firm_trips.php"); exit; }
         </div>
     </div>
 </div>
+
 <?php require '../layouts/footer.php'; ?>

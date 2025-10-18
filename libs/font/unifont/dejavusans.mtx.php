@@ -13,7 +13,7 @@ $desc=array (
 );
 $up=-63;
 $ut=44;
-$ttffile='C:\Users\UMUT\OneDrive\Masaüstü\bilet-satin-alma\libs/font/unifont/DejaVuSans.ttf';
+$ttffile='/var/www/html/libs/font/unifont/DejaVuSans.ttf';
 $originalsize=757076;
 $fontkey='dejavu';
 ?>

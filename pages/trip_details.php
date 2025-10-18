@@ -7,7 +7,7 @@ $trip_id = $_GET['id'] ?? null;
 if (!$trip_id) { header("Location: /index.php"); exit; }
 
 $user_id = $_SESSION['user_id'] ?? null;
-$user_role = $_SESSION['role'] ?? null; // Rolü de bir değişkene alıyoruz
+$user_role = $_SESSION['role'] ?? null;
 $success_message = '';
 $error_message = '';
 
@@ -23,44 +23,54 @@ if (!$trip) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['buy_ticket'])) {
-    // GÜVENLİK KONTROLÜ: Satın alma işlemini sadece 'user' rolü yapabilir
-    if (!$user_id || $user_role !== 'user') {
-        exit('Bu işlemi yapma yetkiniz yok.');
-    }
+    if (!$user_id || $user_role !== 'user') { exit('Bu işlemi yapma yetkiniz yok.'); }
     
     $selected_seats = $_POST['seats'] ?? [];
     if (empty($selected_seats)) {
         $error_message = "Lütfen en az bir koltuk seçin.";
     } else {
-        $total_price = count($selected_seats) * $trip['price'];
+        $stmt_sold_check = $pdo->prepare("SELECT bs.seat_number FROM Booked_Seats bs JOIN Tickets t ON bs.ticket_id = t.id WHERE t.trip_id = ? AND t.status = 'active'");
+        $stmt_sold_check->execute([$trip_id]);
+        $sold_seats_check = $stmt_sold_check->fetchAll(PDO::FETCH_COLUMN);
+
+        foreach ($selected_seats as $seat) {
+            if ($seat < 1 || $seat > $trip['capacity']) {
+                $error_message = "Geçersiz koltuk numarası gönderildi: " . htmlspecialchars($seat);
+                break;
+            }
+            if (in_array($seat, $sold_seats_check)) {
+                $error_message = "Seçmeye çalıştığınız bir koltuk (" . htmlspecialchars($seat) . ") başkası tarafından alındı.";
+                break;
+            }
+        }
         
-        $stmt_balance = $pdo->prepare("SELECT balance FROM Users WHERE id = ?");
-        $stmt_balance->execute([$user_id]);
-        $user_balance = $stmt_balance->fetchColumn();
+        if (empty($error_message)) {
+            $total_price = count($selected_seats) * $trip['price'];
+            $stmt_balance = $pdo->prepare("SELECT balance FROM Users WHERE id = ?");
+            $stmt_balance->execute([$user_id]);
+            $user_balance = $stmt_balance->fetchColumn();
 
-        if ($user_balance < $total_price) {
-            $error_message = "Yetersiz bakiye! Mevcut bakiyeniz: {$user_balance} TL, Toplam Tutar: {$total_price} TL";
-        } else {
-            $pdo->beginTransaction();
-            try {
-                $ticket_id = generate_uuid();
-                $stmt_ticket = $pdo->prepare("INSERT INTO Tickets (id, trip_id, user_id, total_price) VALUES (?, ?, ?, ?)");
-                $stmt_ticket->execute([$ticket_id, $trip_id, $user_id, $total_price]);
-
-                $stmt_seat = $pdo->prepare("INSERT INTO Booked_Seats (id, ticket_id, seat_number) VALUES (?, ?, ?)");
-                foreach ($selected_seats as $seat) {
-                    $stmt_seat->execute([generate_uuid(), $ticket_id, $seat]);
+            if ($user_balance < $total_price) {
+                $error_message = "Yetersiz bakiye! Mevcut bakiyeniz: {$user_balance} TL, Toplam Tutar: {$total_price} TL";
+            } else {
+                $pdo->beginTransaction();
+                try {
+                    $ticket_id = generate_uuid();
+                    $stmt_ticket = $pdo->prepare("INSERT INTO Tickets (id, trip_id, user_id, total_price) VALUES (?, ?, ?, ?)");
+                    $stmt_ticket->execute([$ticket_id, $trip_id, $user_id, $total_price]);
+                    $stmt_seat = $pdo->prepare("INSERT INTO Booked_Seats (id, ticket_id, seat_number) VALUES (?, ?, ?)");
+                    foreach ($selected_seats as $seat) {
+                        $stmt_seat->execute([generate_uuid(), $ticket_id, $seat]);
+                    }
+                    $new_balance = $user_balance - $total_price;
+                    $stmt_balance_update = $pdo->prepare("UPDATE Users SET balance = ? WHERE id = ?");
+                    $stmt_balance_update->execute([$new_balance, $user_id]);
+                    $pdo->commit();
+                    $success_message = "Biletiniz başarıyla satın alındı! Koltuklar: " . implode(', ', $selected_seats);
+                } catch (Exception $e) {
+                    $pdo->rollBack();
+                    $error_message = "Bilet alımı sırasında bir hata oluştu: " . $e->getMessage();
                 }
-
-                $new_balance = $user_balance - $total_price;
-                $stmt_balance_update = $pdo->prepare("UPDATE Users SET balance = ? WHERE id = ?");
-                $stmt_balance_update->execute([$new_balance, $user_id]);
-
-                $pdo->commit();
-                $success_message = "Biletiniz başarıyla satın alındı! Koltuklar: " . implode(', ', $selected_seats);
-            } catch (Exception $e) {
-                $pdo->rollBack();
-                $error_message = "Bilet alımı sırasında bir hata oluştu: " . $e->getMessage();
             }
         }
     }
@@ -129,7 +139,7 @@ $sold_seats = $stmt_sold->fetchAll(PDO::FETCH_COLUMN);
         <?php elseif (isset($_SESSION['user_id'])): ?>
             <div class="alert alert-warning h-100 d-flex align-items-center justify-content-center text-center shadow-sm">Bilet satın alma işlemi sadece "Yolcu" (user) rolündeki hesaplar için geçerlidir.</div>
         <?php else: ?>
-            <div class="alert alert-info h-100 d-flex align-items-center justify-content-center text-center shadow-sm">Bilet satın almak için lütfen <a href="/login.php" class="alert-link">giriş yapın</a>.</div>
+            <div class="alert alert-info h-100 d-flex align-items-center justify-content-center text-center shadow-sm">Bilet satın almak için lütfen <a href="/login.php" class="alert-link">giriş yapın</a> veya <a href="/register.php" class="alert-link">kayıt olun</a>.</div>
         <?php endif; ?>
     </div>
 </div>

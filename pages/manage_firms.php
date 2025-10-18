@@ -4,16 +4,33 @@ require '../includes/db.php';
 function generate_uuid() { return sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x', mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0x0fff) | 0x4000, mt_rand(0, 0x3fff) | 0x8000, mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)); }
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') { header("Location: /login.php"); exit; }
+
+// - GÜVENLİK ANAHTARINI (TOKEN) OLUŞTURMA -
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+$csrf_token = $_SESSION['csrf_token'];
+
 $success_message = ''; $error_message = '';
 if (isset($_SESSION['flash_success'])) { $success_message = $_SESSION['flash_success']; unset($_SESSION['flash_success']); }
 
+// - FİRMA SİLME (TOKEN KONTROLÜ İLE) -
 if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['id'])) {
-    $firm_id_to_delete = $_GET['id'];
-    $stmt = $pdo->prepare("DELETE FROM Bus_Company WHERE id = ?");
-    try { $stmt->execute([$firm_id_to_delete]); $_SESSION['flash_success'] = "Firma başarıyla silindi."; header("Location: manage_firms.php"); exit;
-    } catch (PDOException $e) { $error_message = "Firma silinirken bir hata oluştu: " . $e->getMessage(); }
+    if (!isset($_GET['token']) || !hash_equals($_SESSION['csrf_token'], $_GET['token'])) {
+        $error_message = "Geçersiz güvenlik anahtarı! İşlem reddedildi.";
+    } else {
+        $firm_id_to_delete = $_GET['id'];
+        $stmt = $pdo->prepare("DELETE FROM Bus_Company WHERE id = ?");
+        try { 
+            $stmt->execute([$firm_id_to_delete]); 
+            $_SESSION['flash_success'] = "Firma başarıyla silindi."; 
+            header("Location: manage_firms.php"); 
+            exit;
+        } catch (PDOException $e) { $error_message = "Firma silinirken bir hata oluştu: " . $e->getMessage(); }
+    }
 }
 
+// - FİRMA EKLEME -
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_firm'])) {
     $firm_name = trim($_POST['firm_name']);
     if (empty($firm_name)) { $error_message = "Firma adı boş bırakılamaz."; } else {
@@ -45,9 +62,21 @@ $firms = $stmt->fetchAll();
         <?php if (count($firms) > 0): ?>
             <div class="table-responsive"><table class="table table-striped table-hover align-middle">
                 <thead class="table-light"><tr><th>Firma Adı</th><th class="text-end">İşlemler</th></tr></thead>
-                <tbody><?php foreach ($firms as $firm): ?><tr><td><?= htmlspecialchars($firm['name']) ?></td><td class="text-end"><a href="edit_firm.php?id=<?= $firm['id'] ?>" class="btn btn-sm btn-warning">Düzenle</a> <a href="?action=delete&id=<?= $firm['id'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('Bu firmayı silmek istediğinizden emin misiniz?');">Sil</a></td></tr><?php endforeach; ?></tbody>
+                <tbody>
+                    <?php foreach ($firms as $firm): ?>
+                    <tr>
+                        <td><?= htmlspecialchars($firm['name']) ?></td>
+                        <td class="text-end">
+                            <a href="edit_firm.php?id=<?= $firm['id'] ?>" class="btn btn-sm btn-warning">Düzenle</a> 
+                            
+                            <a href="?action=delete&id=<?= $firm['id'] ?>&token=<?= $csrf_token ?>" class="btn btn-sm btn-danger" onclick="return confirm('Bu firmayı silmek istediğinizden emin misiniz?');">Sil</a>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
             </table></div>
         <?php else: ?><p class="text-center">Sistemde kayıtlı firma bulunmuyor.</p><?php endif; ?>
+    
     </div>
 </div>
 <?php require '../layouts/footer.php'; ?>

@@ -2,7 +2,7 @@
 ob_start();
 session_start();
 require '../includes/db.php';
-require '../libs/tFPDF.php';
+require '../libs/tfpdf.php';
 
 if (!isset($_SESSION['user_id']) || !isset($_GET['ticket_id'])) {
     exit('Geçersiz istek.');
@@ -10,10 +10,9 @@ if (!isset($_SESSION['user_id']) || !isset($_GET['ticket_id'])) {
 
 $user_id = $_SESSION['user_id'];
 $user_role = $_SESSION['role'];
-$company_id = $_SESSION['firm_id'] ?? null; // Firma Admin'in firma ID'si
+$company_id = $_SESSION['firm_id'] ?? null;
 $ticket_id = $_GET['ticket_id'];
 
-// Bilet bilgilerini çek (firma ID'sini de alıyoruz)
 $stmt = $pdo->prepare("
     SELECT 
         t.user_id as owner_id, 
@@ -35,16 +34,19 @@ if (!$ticket) {
     exit('Bilet bulunamadı veya aktif değil.');
 }
 
-// --- YENİ YETKİ KONTROLÜ ---
+// -YETKİ KONTROLÜ -
 $is_owner = ($user_id === $ticket['owner_id']);
+// Değişkeni kontrol etmeden önce varsayılan olarak 'false' yaptım
+$is_correct_company_admin = false; 
+if ($user_role === 'company_admin') {
+    $is_correct_company_admin = ($company_id === $ticket['trip_company_id']);
+}
 
 if (!$is_owner && !$is_correct_company_admin) {
     exit('Bu bileti görüntüleme yetkiniz yok.');
 }
-// --- YETKİ KONTROLÜ BİTİŞİ ---
 
-// DEĞİKLİK BURADA: FPDF yerine tFPDF class'ını kullanıyoruz
-$pdf = new tFPDF();
+$pdf = new tfpdf();
 $pdf->AddPage();
 $pdf->AddFont('DejaVu','','DejaVuSans.ttf',true);
 $pdf->SetFont('DejaVu','',16);

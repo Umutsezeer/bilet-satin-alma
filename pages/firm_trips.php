@@ -4,7 +4,7 @@ require '../includes/db.php';
 function generate_uuid() { return sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x', mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0x0fff) | 0x4000, mt_rand(0, 0x3fff) | 0x8000, mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)); }
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'company_admin') { header("Location: /login.php"); exit; }
-$company_id = $_SESSION['firm_id']; // Session'daki adı 'firm_id' idi, tutarlılık için böyle bırakalım.
+$company_id = $_SESSION['firm_id']; // Session'daki adı 'firm_id' idi, tutarlılık için böyle bıraktım.
 $success_message = ''; $error_message = '';
 if (isset($_SESSION['flash_success'])) { $success_message = $_SESSION['flash_success']; unset($_SESSION['flash_success']); }
 
